@@ -12,7 +12,7 @@ x=c('tidyr','dplyr',"ggplot2","XLConnect","lubridate","mgsub","gsubfn","tidyvers
     "ggplot2","ggalt","gganimate","gapminder","ggExtra","ggcorrplot","summarytools","GGally",
     "car","pROC","gridExtra","rmarkdown","tree","ISLR","randomForest","gbm","rpart","rpart.plot")
 lapply(x, require, character.only = TRUE)
-setwd('D:\\CIT\\Sem1\\Data_Science&Analytics\\Assignment')
+setwd('D:\\Data_Science&Analytics\\Assignment')
 getwd()
 ```
 
