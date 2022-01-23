@@ -1,0 +1,384 @@
+---
+title: "Data Science and Analytics Assignment"
+author: "Simranpal Kohli R00171375"
+date: "04/12/2019"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r include=FALSE}
+x=c('tidyr','dplyr',"ggplot2","XLConnect","lubridate","mgsub","gsubfn","tidyverse","rqdatatable",
+    "ggplot2","ggalt","gganimate","gapminder","ggExtra","ggcorrplot","summarytools","GGally",
+    "car","pROC","gridExtra","rmarkdown","tree","ISLR","randomForest","gbm","rpart","rpart.plot")
+lapply(x, require, character.only = TRUE)
+setwd('D:\\CIT\\Sem1\\Data_Science&Analytics\\Assignment')
+getwd()
+```
+
+__Reading XLSX data using XLConnect Package__
+```{r include=TRUE}
+credit_train_df=readWorksheetFromFile("Credit_Risk6_final.xlsx", sheet = "Training_Data", header = TRUE)
+head(credit_train_df,n = 3)
+credit_test_df=readWorksheetFromFile("Credit_Risk6_final.xlsx", sheet = "Scoring_Data", header = TRUE)
+head(credit_test_df,n=3)
+```
+
+## Preprocessing of Data
+
+__1) Checking NA values__:
+   __Employment has 33 NA, Personal Status has 6 NA and Housing has 5 NA. We will impute this NA values__
+```{r}
+apply(credit_train_df,2,function(x) sum(is.na(x)))
+```
+__2) Employment Type _Short_ has 242 occurences so we will impute it__
+```{r}
+sort(table(credit_train_df$Employment),decreasing = T)
+```
+_we will impute the NA values with Short type for Employment column_
+```{r}
+credit_train_df$Employment=replace_na(credit_train_df$Employment,'Short')
+```
+
+__3) Personal Status has Single type with 431 rows__
+```{r}
+sort(table(credit_train_df$Personal.Status),decreasing = T)
+```
+_we will impute the NA values with Single type for Personal Status column_
+```{r}
+credit_train_df$Personal.Status=replace_na(credit_train_df$Personal.Status,'Single')
+```
+
+__4) Housing has Single with 524 rows__
+```{r}
+sort(table(credit_train_df$Housing),decreasing = T)
+```
+_we will impute the NA values with Own type for Housing column_
+```{r}
+credit_train_df$Housing=replace_na(credit_train_df$Housing,'Own')
+```
+_Now we can see that we have no NA values after imputing with maximum count_
+```{r}
+apply(credit_train_df,2,function(x) sum(is.na(x)))
+```
+__Making the column name common for Both the dataset__
+
+```{r}
+colnames(credit_train_df)[12]=colnames(credit_test_df[12])
+```
+
+```{r include=FALSE}
+credit_factor_train=c("Checking.Acct","Credit.History","Loan.Reason","Savings.Acct","Employment","Personal.Status","Housing",
+                "Job.Type","Foreign.National","Credit.Standing")
+credit_factor_test=c("Checking.Acct","Credit.History","Loan.Reason","Savings.Acct","Employment","Personal.Status","Housing",
+                "Job.Type","Foreign.National")
+```
+
+
+__converting all the character class to convert it into factors__
+```{r}
+credit_train_df[credit_factor_train] <- lapply(credit_train_df[credit_factor_train], factor)
+credit_test_df[credit_factor_test] <- lapply(credit_test_df[credit_factor_test], factor)
+```
+
+
+## Question a): Trivariate analysis
+
+__Finding the cross tabulation between Saving Account, Credit History and Credit Standing__
+```{r}
+xtabs(~Checking.Acct+Credit.History+Credit.Standing,data=credit_train_df)
+xtabs(~Savings.Acct+Credit.History+Credit.Standing,data=credit_train_df)
+```
+_For Credit standing Good, we have more most people with paid loans compared to Bad type._
+
+## Question b): Decision Tree
+
+__Step1) Building the Decision Tree on Train Dataset__
+```{r}
+credit_RDT_model=rpart(Credit.Standing~.,data = credit_train_df[,-1])
+credit_RDT_model
+```
+
+__Step2) Plotting the Decision Tree__
+```{r}
+rpart.plot(credit_RDT_model,cex=0.5,roundint = FALSE)
+# text(credit_RDT_model,pretty=0, cex=0.5)
+```
+
+__Step3) Predicting the model on Train dataset__
+```{r}
+credit_RDT_predict=predict(credit_RDT_model,newdata = credit_train_df[-1],type = c('class'))
+```
+__Step4) Finding the model performance using Accuracy of the model__
+```{r}
+confusion_Mat=table(credit_train_df$Credit.Standing,credit_RDT_predict)
+Accuracy_DT <- sum(diag(confusion_Mat))/sum(confusion_Mat)
+Accuracy_DT
+```
+
+__Step4) Predicting the model on Scoring dataset: We can take the prediction value as 78%__
+```{r}
+credit_RDT_pred_scoring=predict(credit_RDT_model,credit_test_df,type = "class")
+credit_RDT_pred_scoring
+```
+
+
+## Question c): Explaining the Decision Tree
+
+__We will first predict the data on the scoring dataset.__
+```{r}
+credit_RDT_pred_scoring=predict(credit_RDT_model,credit_test_df,type = "class")
+credit_RDT_pred_scoring
+```
+
+## __Explaining the decision tree__
+__Basics of Decision Tree:__ _Decision Tree algorithm works in a form of leaf/root node concepts.Each node makes decision_ _of YES or NO.In Decision tree, a concept of Enthropy/Gini Index/Information gain is used to find the column to_ _be selected for making decision._
+
+__For instance:__
+__ROW1__: _Let us consider a column from Scoring dataset with values as listed below._
+_ID: 781	and Credit History: All Paid_
+_Credit History has minimum Entropy out of all columns, so decision tree is the column got selected. When Credit History_ _is of type 'All Paid' OR 'Current', decision goes to left and if the Credit History is Critical, decision goes to right._ _So if we consider first column, Credit History is All Paid so the final decision is BAD as can be read from the_ _tree._
+
+__ROW2:__ _Let us consider second row with values as below_
+_ID: 781, Credit History: Critical, Employment: Medium, Loan Reason: Car Used In the second level, Credit History again_ _got selected with minimum entropy. So as our column, contains Credit History as Critical, tree will be moved to the_ _Left. Here, Employment got selected with minimum entropy, so if it is Medium tree takes it to the next node to the left._ _Now, it is been judged based on the value of Loan Reason as the least entropy. Our data has Loan Reason as Car_ _used it will directly take the final decision to the left with Bad._
+
+__ROW3:__ _If we consider row with ID: 782 Credit History as Current, it will take the final decision of BAD directly by_ _considering the left path._
+
+__ROW4:__ _If we consider row with ID: 792, Credit History as Critical will take the tree to the left._
+_Employment as Short will take the tree to the right which directly makes the final decision of GOOD._
+
+__ROW5:__ _If we consider row with ID: 783, Credit History as Current will take the tree to the left._
+_Decision is made with result as BAD_
+
+## Question d): Random Forest & Boosting Technique
+
+__Step1) Building the Random Forest model with train data set__
+```{r}
+credit_RF_model=randomForest(Credit.Standing~.-ID,data=credit_train_df,ntree=100,mtry=5)
+credit_RF_model
+```
+```{r include=FALSE}
+credit_test_df <- rbind(credit_train_df[1,-14] , credit_test_df)
+credit_test_df <- credit_test_df[-1,]
+```
+
+__Step2) Predicting on train dataset: Model accuracy is 93%__
+```{r}
+credit_RF_Pred_train=predict(credit_RF_model,newdata=credit_train_df,type="response")
+RF_confmat=table(credit_train_df$Credit.Standing,credit_RF_Pred_train)
+RF_Accuracy_Train <- sum(diag(RF_confmat))/sum(RF_confmat)
+RF_Accuracy_Train
+```
+
+__Step3) Predicting on Scoring datasets__
+```{r}
+ credit_RF_Pred_scoring=predict(credit_RF_model,newdata=credit_test_df,type="response")
+credit_RF_Pred_scoring
+```
+
+__Step4) Building the Boosting model with train dataset__
+```{r}
+credit_train_df=credit_train_df %>% mutate(Credit.Standing_10=as.numeric(Credit.Standing=="Good"))
+credit_GBM_model=gbm(Credit.Standing_10~.,data=credit_train_df[c(-1,-14)],distribution = "multinomial",
+                     n.trees = 100,interaction.depth = 3)
+```
+
+__Step5) Predicting on Train dataset__
+```{r}
+credit_GBM_Pred_train=predict.gbm(object = credit_GBM_model,
+                                  newdata = credit_train_df[c(-1,-14,-15)],
+                                  n.trees = 100,
+                                  type = "response")
+credit_GBM_Pred_train_val=ifelse(credit_GBM_Pred_train[781:1560]<0.5,0,1)
+boost_confmat=table(credit_train_df$Credit.Standing,credit_GBM_Pred_train_val)
+Boost_Accuracy_Train <- sum(diag(boost_confmat))/sum(boost_confmat)
+Boost_Accuracy_Train
+```
+
+__Step6) Predicting on Scoring Datasets__
+```{r}
+credit_GBM_Pred_train=predict.gbm(object = credit_GBM_model,
+                                  newdata = credit_train_df[c(-1,-14,-15)],
+                                  n.trees = 100,
+                                  type = "response")
+pred = predict.gbm(object = credit_GBM_model,
+                   newdata = credit_test_df,
+                   n.trees = 200,
+                   type = "response")
+credit_GBM_Pred_scoring=ifelse(pred[14:26]<0.5,'Bad','Good')
+credit_GBM_Pred_scoring
+```
+
+
+## Question e): Pattern in the dataset
+
+_we will take Decision Tree to predict the pattern in the dataset._
+_We have taken predicted values of Decision true and check where there is a consecutive incorrect results in the_
+_result set. We could see from the below result that the predicted values of Id's 299 to 336 has incorrect results_.
+_Her getting suspicious about the incorrect pattern appears to be a valid reason._
+```{r}
+credit_train_df=cbind(credit_train_df,Predicted=credit_RDT_predict)
+credit_train_df[which(credit_train_df$Credit.Standing!=credit_RDT_predict & credit_train_df$ID %in% 304:326),c("ID","Credit.Standing","Predicted")]
+```
+
+## Question f): Infogain algorithm
+
+__Step1) Create the Entropy for dependent variable 'Credit.Standing' so to subtract it to the Independent column to get Information gain__
+```{r include=FALSE}
+numeric_factors=c("Residence.Time","Age","Months.since.Checking.Acct.opened.")
+credit_train_df[numeric_factors] <- lapply(credit_train_df[numeric_factors], factor)
+credit_test_df[numeric_factors] <- lapply(credit_test_df[numeric_factors], factor)
+```
+
+```{r}
+DV_Prop <- prop.table(table(credit_train_df$Credit.Standing))
+DV_Entropy=sum(-DV_Prop*log2(DV_Prop))
+DV_Entropy
+```
+
+__Step2) Find the proportion of independent variables wrt Credit.Standing__
+```{r}
+table_func <- function(x) {prop.table(table(credit_train_df[,x],credit_train_df[,14]) + 1e-6, margin = 1)} 
+print(table_func(4))
+```
+
+__Step3) Apply the Entropy formulae i.e. -p*log2(p)-q*log2(q) for respect columns where p=probability of occurence__
+__of an event and q=1-p__
+```{r}
+-table_func(4)*log2(table_func(4))
+```
+
+__Step4) Rowsum all the categories of a column to find the individual category Entropy values__
+```{r}
+rowSums(-table_func(10)*log2(table_func(10)))
+```
+
+__Step5) Find the weight of that column and multiply it with individual category entropy to find complete entropy Of that column__
+```{r}
+prop.table(table(credit_train_df$Foreign.National))
+```
+
+__Step6) Below code will find the entropy for a particular column by multiply each categories to its weight and summing__ __all the categories to find overall column entropy__
+```{r}
+sum(prop.table(table(credit_train_df$Foreign.National))*rowSums(-table_func(10)*log2(table_func(10))))
+```
+
+__Step7) Summing up above code to find the Information Gain using Entropy i.e. INFO GAIN=Entropy of the Dependent__ __variable - Entropy of Independent of all the columns by a single function. We have calculated the Information gain by__ __subtracting Entropy of a column with Entropy of Credit Standing.__
+```{r}
+Column_Entropy_New <- function(x) { 
+  table_func <- prop.table(table(credit_train_df[,x],credit_train_df[,14]) + 1e-6, margin = 1)
+  DV_Entropy-sum(prop.table(table(credit_train_df[,x]))*rowSums(-table_func*log2(table_func)))}
+```
+
+__Step8) We have found the maximum of all the Entropy to decide which column to be selected as the column of split in a__ __Decision Tree__
+```{r}
+Information_Gain=sapply(credit_factor_test,Column_Entropy_New)
+Information_Gain[which.max(Information_Gain)]
+```
+
+
+## Question g): Adaboost Algorithm
+_Boosting Algorithm is based on the technique sequential model process where the error of one model acts as an dependent variable to the next model.In case of Adaboost, we will initially assign a default weight to each row based on_
+_1/number of rows. We will find the errors based on predicted and actual values. We will find the value of the amount_
+_of say i.e. Alpha with the formulae alpha=0.5*ln((1-error_weight)/error_weight). We will assign this alpha value_
+_and find adjustment using the formulae as: if error is 1, e^-alpha and if the error is 0, e^-alpha._
+_We will find the adjusted weight as original weight*adjustment. We will normalise the result as New_Weights_.
+_This new weights acts as an Weight for next stump. This process repeats for 4 iteration in our example._
+_In the end, the final decision is been made based on the weight assign to each Stump_.
+
+```{r}
+adaboost_list <- vector('list', 4)
+for(iterations in seq(1,4)){
+  set.seed(iterations)
+  predicted=sample(c(0,1), replace=TRUE, size=10)
+  name=paste("adaboost",iterations,"df",sep = "_")
+  
+  if(iterations==1){
+    adaboost_list[[name]]=data.frame(Id=1:10, Label=c(0,1,1,0,1,1,0,1,0,0),Weights=rep(0.1,10),
+                                     P1=c(0,1,0,0,0,0,1,1,0,0),Prediction=predicted)
+  }
+  
+  else{
+    adaboost_list[[name]]=data.frame(Id=1:10, Label=c(0,1,1,0,1,1,0,1,0,0),Weights=adaboost_list[[previous_name]]$New_Weights,
+                                     P1=c(0,1,0,0,0,0,1,1,0,0),Prediction=predicted)
+  }
+  adaboost_list[[name]]=cbind(adaboost_list[[name]],
+                              Error=ifelse(adaboost_list[[name]]$Prediction==adaboost_list[[name]]$Label,0,1))
+  adaboost_list[[name]]=cbind(adaboost_list[[name]],Er_Wgt=adaboost_list[[name]]$Weights*adaboost_list[[name]]$Error)
+  
+  alpha_1=0.5*log((1-sum(adaboost_list[[name]]$Er_Wgt))/sum(adaboost_list[[name]]$Er_Wgt))
+  print(alpha_1)
+  adaboost_list[[name]]=cbind(adaboost_list[[name]],Adjustment=ifelse(adaboost_list[[name]]$Error==1,
+                                                                      exp(alpha_1),exp(-alpha_1)))
+  adaboost_list[[name]]=cbind(adaboost_list[[name]],Adj_Wgt=adaboost_list[[name]]$Adjustment*adaboost_list[[name]]$Weights)
+  adaboost_list[[name]]=cbind(adaboost_list[[name]],New_Weights=adaboost_list[[name]]$Adj_Wgt/sum(adaboost_list[[name]]$Adj_Wgt))
+  previous_name=name
+}
+adaboost_list
+```
+
+
+## Question h): ROC Curve
+
+__Step1) Considering the Boosting model to find the probabilities prediction__
+```{r}
+gbm_pred_1=credit_GBM_Pred_train[781:1560]
+```
+
+__Step2) Defining the cutoff dataframe__
+```{r}
+cutoff_data=data.frame(cutoff=0,TP=0,FP=0,FN=0,TN=0)
+```
+
+__Step3) Creating cutoffs between 0 to 1 100 values__
+```{r}
+cutoffs=round(seq(0,1,length=100),3)
+```
+
+__Step4) Looping to set the TP,FP, TN, FN__
+```{r}
+for (cutoff in cutoffs){
+  predicted=as.numeric(gbm_pred_1>cutoff)
+  
+  TP=sum(predicted==1 & credit_train_df$Credit.Standing_10==1)
+  FP=sum(predicted==1 & credit_train_df$Credit.Standing_10==0)
+  FN=sum(predicted==0 & credit_train_df$Credit.Standing_10==1)
+  TN=sum(predicted==0 & credit_train_df$Credit.Standing_10==0)
+  cutoff_data=rbind(cutoff_data,c(cutoff,TP,FP,FN,TN))
+}
+
+```
+
+```{r include=FALSE}
+cutoff_data=cutoff_data[-1,]
+P=TP+FN
+N=TN+FP
+total=P+N
+```
+
+__Step5) Setting the different matrix e.g. Specificity, Sensitivity, KS, Accuracy based on the cutoff dataframe__
+```{r}
+cutoff_data=cutoff_data %>%
+  mutate(Sn=TP/P, Sp=TN/N,
+         dist=sqrt((1-Sn)**2+(1-Sp)**2),
+         P=FN+TP,N=TN+FP) %>%
+  mutate(KS=abs((TP/P)-(FP/N))) %>%
+  mutate(Accuracy=(TP+TN)/(P+N)) %>%
+  mutate(Lift=(TP/P)/((TP+FP)/(P+N))) %>%
+  mutate(M=(8*FN+2*FP)/(P+N)) %>%
+  select(-P,-N)
+```
+
+__Step6) Creating ROC dataframe with True positive rate as Sensitivity and False Positive Rate as 1-Specificity__
+```{r}
+roc_data=cutoff_data %>% 
+  select(cutoff,Sn,Sp) %>% 
+  mutate(TPR=Sn,FPR=1-Sp) %>% 
+  select(cutoff,TPR,FPR)
+```
+
+__Step7) # Plotting the ROC AUC Curve__
+```{r}
+plot(roc_data$FPR,roc_data$TPR,main="ROC AUC Curve",xlab="True Positive Rate",ylab="False Positive Rate")
+lines(roc_data$FPR,roc_data$TPR)
+```
